@@ -42,8 +42,12 @@ jobs:
           const password = process.env.VIEWER_PASSWORD;
           const repo = process.env.REPO_NAME;
 
-          if (!token || !password) {
-            console.error('Error: VIEWER_GITHUB_TOKEN and VIEWER_PASSWORD secrets must be set');
+          if (!token || !password || !repo) {
+            console.error('Error: Missing required secrets!');
+            console.error('Required secrets: VIEWER_GITHUB_TOKEN, VIEWER_PASSWORD, REPOSITORY');
+            console.error(`Token: ${token ? 'SET' : 'MISSING'}`);
+            console.error(`Password: ${password ? 'SET' : 'MISSING'}`);
+            console.error(`Repository: ${repo ? 'SET' : 'MISSING'}`);
             process.exit(1);
           }
 
@@ -127,3 +131,4 @@ jobs:
           echo "✅ Token is encrypted with AES-256-GCM" >> $GITHUB_STEP_SUMMARY
           echo "✅ Password never stored in code or logs" >> $GITHUB_STEP_SUMMARY
           echo "✅ Session cleared when browser closes" >> $GITHUB_STEP_SUMMARY
+
