@@ -517,7 +517,7 @@
                             <div class="apk-name">${icon} ${asset.name}</div>
                             <div class="apk-size">${size}</div>
                         </div>
-                        <button class="download-btn" onclick="downloadAsset(event, '${asset.url}', '${asset.name}')">
+                        <button class="download-btn" onclick="downloadAsset(event, '${asset.url}')">
                             ⬇️ Download
                         </button>
                     `;
@@ -526,29 +526,14 @@
             });
         }
 
-        async function downloadAsset(event, assetUrl, fileName) {
+        function downloadAsset(event, assetUrl) {
             event.preventDefault();
             
-            try {
-                // For private repos, we can't use fetch/XHR due to CORS restrictions
-                // when GitHub redirects to Azure Blob Storage. However, we can open
-                // the URL directly in a new window/tab, and GitHub will handle the
-                // authentication and redirect with proper signed URLs.
-                
-                // Construct the authenticated download URL
-                // GitHub API format: https://api.github.com/repos/{owner}/{repo}/releases/assets/{asset_id}
-                // We need to append the token as a query parameter for direct navigation
-                const urlWithAuth = `${assetUrl}?access_token=${decryptedToken}`;
-                
-                // Open in new tab - browser won't enforce CORS for direct navigation
-                window.open(urlWithAuth, '_blank');
-                
-                // Note: This will open the download in a new tab which will close automatically
-                // after the download starts. This is the simplest way to handle private GitHub assets.
-            } catch (err) {
-                showError(`Failed to initiate download for ${fileName}: ${err.message}`);
-                console.error('Download error:', err);
-            }
+            // Simply open the GitHub API asset URL in a new tab with authentication
+            // The browser will follow redirects to the final Azure Blob Storage URL
+            // without CORS restrictions since it's direct navigation, not a fetch request
+            const urlWithAuth = `${assetUrl}?access_token=${decryptedToken}`;
+            window.open(urlWithAuth, '_blank');
         }
 
         function formatBytes(bytes) {
@@ -569,3 +554,4 @@
     </script>
 </body>
 </html>
+
