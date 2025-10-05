@@ -297,7 +297,7 @@
 
     <script>
         // ENCRYPTED_CONFIG will be replaced by GitHub Actions
-        // Format: {repo: "username/repo", encryptedToken: "..."}
+        // Format: {encryptedData: "..."} - Both repo and token are encrypted together
         const ENCRYPTED_CONFIG = "%%ENCRYPTED_CONFIG%%";
 
         let decryptedToken = sessionStorage.getItem('decrypted_token');
@@ -337,13 +337,14 @@
                     return;
                 }
 
-                // Decrypt token using password
-                const token = await decryptToken(config.encryptedToken, password);
+                // Decrypt the data (contains both repo and token as JSON)
+                const decryptedData = await decryptToken(config.encryptedData, password);
+                const credentials = JSON.parse(decryptedData);
                 
                 // Verify token by making a test API call
-                const testResponse = await fetch(`https://api.github.com/repos/${config.repo}/releases?per_page=1`, {
+                const testResponse = await fetch(`https://api.github.com/repos/${credentials.repo}/releases?per_page=1`, {
                     headers: {
-                        'Authorization': `token ${token}`,
+                        'Authorization': `token ${credentials.token}`,
                         'Accept': 'application/vnd.github.v3+json'
                     }
                 });
@@ -353,10 +354,10 @@
                 }
 
                 // Store in session (cleared when browser closes)
-                sessionStorage.setItem('decrypted_token', token);
-                sessionStorage.setItem('repo', config.repo);
-                decryptedToken = token;
-                repo = config.repo;
+                sessionStorage.setItem('decrypted_token', credentials.token);
+                sessionStorage.setItem('repo', credentials.repo);
+                decryptedToken = credentials.token;
+                repo = credentials.repo;
 
                 // Update UI
                 document.getElementById('loginBox').style.display = 'none';
