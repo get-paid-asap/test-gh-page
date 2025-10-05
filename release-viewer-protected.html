@@ -517,11 +517,9 @@
                             <div class="apk-name">${icon} ${asset.name}</div>
                             <div class="apk-size">${size}</div>
                         </div>
-                        <a href="${asset.browser_download_url}" 
-                           class="download-btn" 
-                           onclick="downloadAsset(event, '${asset.url}', '${asset.name}')">
+                        <button class="download-btn" onclick="downloadAsset(event, '${asset.url}', '${asset.name}')">
                             ⬇️ Download
-                        </a>
+                        </button>
                     `;
                     apkList.appendChild(apkItem);
                 });
@@ -532,18 +530,34 @@
             event.preventDefault();
             
             try {
+                // First, get the asset metadata which includes the browser_download_url
                 const response = await fetch(assetUrl, {
+                    headers: {
+                        'Authorization': `token ${decryptedToken}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch download URL');
+                }
+
+                const assetData = await response.json();
+                
+                // Use the browser_download_url to download the file directly
+                // This URL is authenticated via the token and doesn't have CORS issues
+                const downloadResponse = await fetch(assetData.url, {
                     headers: {
                         'Authorization': `token ${decryptedToken}`,
                         'Accept': 'application/octet-stream'
                     }
                 });
 
-                if (!response.ok) {
+                if (!downloadResponse.ok) {
                     throw new Error('Download failed');
                 }
 
-                const blob = await response.blob();
+                const blob = await downloadResponse.blob();
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
@@ -575,4 +589,3 @@
     </script>
 </body>
 </html>
-
