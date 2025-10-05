@@ -1,4 +1,4 @@
-name: Deploy Protected Release Viewer
+name: Deploy Protected Release Viewer Debug
 
 on:
   workflow_dispatch:
@@ -26,6 +26,17 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Debug Environment
+        run: |
+          echo "Checking environment variables..."
+          echo "VIEWER_GITHUB_TOKEN is: ${{ secrets.VIEWER_GITHUB_TOKEN != '' && 'SET' || 'MISSING' }}"
+          echo "VIEWER_PASSWORD is: ${{ secrets.VIEWER_PASSWORD != '' && 'SET' || 'MISSING' }}"
+          echo "REPOSITORY is: ${{ secrets.REPOSITORY != '' && 'SET' || 'MISSING' }}"
+          echo "Repository name: ${{ secrets.REPOSITORY }}"
+          echo "Current branch: ${{ github.ref }}"
+          echo "Files in root:"
+          ls -la
+          
       - name: Encrypt Token and Build Viewer
         env:
           GITHUB_TOKEN_VALUE: ${{ secrets.VIEWER_GITHUB_TOKEN }}
@@ -51,13 +62,18 @@ jobs:
             process.exit(1);
           }
 
+          console.log('=== Starting Encryption Process ===');
           console.log('Encrypting credentials with password-based encryption...');
+          console.log(`Repository: ${repo}`);
+          console.log(`Token length: ${token.length} characters`);
+          console.log(`Password length: ${password.length} characters`);
 
           // Create credentials object (contains both repo and token)
           const credentials = JSON.stringify({
             repo: repo,
             token: token
           });
+          console.log(`Credentials JSON length: ${credentials.length} characters`);
 
           // Generate salt and IV
           const salt = crypto.randomBytes(16);
@@ -82,24 +98,50 @@ jobs:
             encryptedData: `${salt.toString('hex')}.${iv.toString('hex')}.${encryptedWithTag.toString('hex')}`
           };
 
-          console.log('Encryption complete!');
+          console.log('=== Encryption Complete ===');
           console.log('Repository name is now encrypted (hidden from source)');
-          console.log('Encrypted data length:', config.encryptedData.length);
+          console.log(`Encrypted data length: ${config.encryptedData.length} characters`);
+          console.log(`Config object: ${JSON.stringify(config).substring(0, 100)}...`);
 
           // Read HTML template
+          console.log('\n=== Reading HTML Template ===');
+          if (!fs.existsSync('release-viewer-protected.html')) {
+            console.error('ERROR: release-viewer-protected.html not found!');
+            console.log('Files in current directory:');
+            console.log(fs.readdirSync('.').join('\n'));
+            process.exit(1);
+          }
+          
           const html = fs.readFileSync('release-viewer-protected.html', 'utf8');
+          console.log(`HTML template read successfully (${html.length} characters)`);
+          
+          // Check if placeholder exists
+          if (!html.includes('%%ENCRYPTED_CONFIG%%')) {
+            console.error('ERROR: Placeholder %%ENCRYPTED_CONFIG%% not found in HTML!');
+            process.exit(1);
+          }
+          console.log('Placeholder found in HTML ✓');
 
           // Replace placeholder with encrypted config
           const outputHtml = html.replace(
             '"%%ENCRYPTED_CONFIG%%"',
             JSON.stringify(config)
           );
+          
+          // Verify replacement worked
+          if (outputHtml.includes('%%ENCRYPTED_CONFIG%%')) {
+            console.error('ERROR: Placeholder was not replaced!');
+            process.exit(1);
+          }
+          console.log('Placeholder replaced successfully ✓');
 
           // Write to output
           fs.mkdirSync('viewer-output', { recursive: true });
           fs.writeFileSync('viewer-output/index.html', outputHtml);
 
+          console.log('\n=== Build Complete ===');
           console.log('Built viewer page: viewer-output/index.html');
+          console.log(`Output file size: ${fs.statSync('viewer-output/index.html').size} bytes`);
           EOF
 
           # Run encryption
