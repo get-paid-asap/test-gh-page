@@ -47,7 +47,13 @@ jobs:
             process.exit(1);
           }
 
-          console.log('Encrypting token with password-based encryption...');
+          console.log('Encrypting credentials with password-based encryption...');
+
+          // Create credentials object (contains both repo and token)
+          const credentials = JSON.stringify({
+            repo: repo,
+            token: token
+          });
 
           // Generate salt and IV
           const salt = crypto.randomBytes(16);
@@ -56,10 +62,10 @@ jobs:
           // Derive key from password
           const key = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
 
-          // Encrypt token
+          // Encrypt credentials (repo + token together)
           const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
           const encrypted = Buffer.concat([
-            cipher.update(token, 'utf8'),
+            cipher.update(credentials, 'utf8'),
             cipher.final()
           ]);
           const authTag = cipher.getAuthTag();
@@ -69,13 +75,12 @@ jobs:
 
           // Create config object
           const config = {
-            repo: repo,
-            encryptedToken: `${salt.toString('hex')}.${iv.toString('hex')}.${encryptedWithTag.toString('hex')}`
+            encryptedData: `${salt.toString('hex')}.${iv.toString('hex')}.${encryptedWithTag.toString('hex')}`
           };
 
           console.log('Encryption complete!');
-          console.log('Repository:', repo);
-          console.log('Encrypted token length:', config.encryptedToken.length);
+          console.log('Repository name is now encrypted (hidden from source)');
+          console.log('Encrypted data length:', config.encryptedData.length);
 
           // Read HTML template
           const html = fs.readFileSync('release-viewer-protected.html', 'utf8');
