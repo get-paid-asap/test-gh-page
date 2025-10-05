@@ -530,42 +530,41 @@
             event.preventDefault();
             
             try {
-                // First, get the asset metadata which includes the browser_download_url
+                // Get the asset metadata to retrieve the authenticated download URL
                 const response = await fetch(assetUrl, {
                     headers: {
                         'Authorization': `token ${decryptedToken}`,
-                        'Accept': 'application/vnd.github.v3+json'
-                    }
-                });
-
-                if (!response.ok) {
-                    throw new Error('Failed to fetch download URL');
-                }
-
-                const assetData = await response.json();
-                
-                // Use the browser_download_url to download the file directly
-                // This URL is authenticated via the token and doesn't have CORS issues
-                const downloadResponse = await fetch(assetData.url, {
-                    headers: {
-                        'Authorization': `token ${decryptedToken}`,
                         'Accept': 'application/octet-stream'
-                    }
+                    },
+                    redirect: 'manual'
                 });
 
-                if (!downloadResponse.ok) {
-                    throw new Error('Download failed');
+                // GitHub returns a 302 redirect to a pre-signed URL
+                // We can get this from the Location header
+                let downloadUrl = response.headers.get('Location');
+                
+                // If no redirect, try getting the direct download URL from the response
+                if (!downloadUrl || response.status !== 302) {
+                    // Fallback: fetch asset metadata and use browser_download_url
+                    const metadataResponse = await fetch(assetUrl, {
+                        headers: {
+                            'Authorization': `token ${decryptedToken}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
+                    });
+                    
+                    if (!metadataResponse.ok) {
+                        throw new Error('Failed to fetch download URL');
+                    }
+                    
+                    const assetData = await metadataResponse.json();
+                    downloadUrl = assetData.browser_download_url;
                 }
 
-                const blob = await downloadResponse.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = fileName;
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                document.body.removeChild(a);
+                // Open the download URL in a new tab to bypass CORS
+                // GitHub's pre-signed URLs don't require additional authentication
+                window.open(downloadUrl, '_blank');
+                
             } catch (err) {
                 showError(`Failed to download ${fileName}: ${err.message}`);
             }
