@@ -528,44 +528,65 @@
 
         async function downloadAsset(event, assetUrl, fileName) {
             event.preventDefault();
+            const button = event.target;
+            const originalText = button.innerHTML;
             
             try {
-                // Get the asset metadata to retrieve the authenticated download URL
+                // Show loading state
+                button.disabled = true;
+                button.innerHTML = '📥 Downloading...';
+                button.style.opacity = '0.6';
+                button.style.cursor = 'not-allowed';
+                
+                // Fetch the asset directly - browser will follow the redirect automatically
+                // GitHub API returns 302 to a pre-signed CDN URL that allows CORS
                 const response = await fetch(assetUrl, {
                     headers: {
                         'Authorization': `token ${decryptedToken}`,
                         'Accept': 'application/octet-stream'
-                    },
-                    redirect: 'manual'
-                });
-
-                // GitHub returns a 302 redirect to a pre-signed URL
-                // We can get this from the Location header
-                let downloadUrl = response.headers.get('Location');
-                
-                // If no redirect, try getting the direct download URL from the response
-                if (!downloadUrl || response.status !== 302) {
-                    // Fallback: fetch asset metadata and use browser_download_url
-                    const metadataResponse = await fetch(assetUrl, {
-                        headers: {
-                            'Authorization': `token ${decryptedToken}`,
-                            'Accept': 'application/vnd.github.v3+json'
-                        }
-                    });
-                    
-                    if (!metadataResponse.ok) {
-                        throw new Error('Failed to fetch download URL');
                     }
-                    
-                    const assetData = await metadataResponse.json();
-                    downloadUrl = assetData.browser_download_url;
+                    // No redirect: 'manual' - let browser follow redirect naturally
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to download file');
                 }
-
-                // Open the download URL in a new tab to bypass CORS
-                // GitHub's pre-signed URLs don't require additional authentication
-                window.open(downloadUrl, '_blank');
+                
+                // Get the file as a blob (this is the main download step)
+                const blob = await response.blob();
+                
+                // Update status while saving
+                button.innerHTML = '💾 Saving...';
+                
+                // Create a temporary URL for the blob
+                const blobUrl = URL.createObjectURL(blob);
+                
+                // Create a temporary link and trigger download
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                
+                // Cleanup
+                document.body.removeChild(a);
+                URL.revokeObjectURL(blobUrl);
+                
+                // Show success
+                button.innerHTML = '✅ Downloaded!';
+                setTimeout(() => {
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                    button.style.opacity = '1';
+                    button.style.cursor = 'pointer';
+                }, 2000);
                 
             } catch (err) {
+                // Reset button on error
+                button.innerHTML = originalText;
+                button.disabled = false;
+                button.style.opacity = '1';
+                button.style.cursor = 'pointer';
                 showError(`Failed to download ${fileName}: ${err.message}`);
             }
         }
