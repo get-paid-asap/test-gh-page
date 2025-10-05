@@ -517,7 +517,7 @@
                             <div class="apk-name">${icon} ${asset.name}</div>
                             <div class="apk-size">${size}</div>
                         </div>
-                        <button class="download-btn" onclick="downloadAsset(event, '${asset.url}')">
+                        <button class="download-btn" onclick="downloadAsset(event, '${asset.url}', '${asset.name}')">
                             ⬇️ Download
                         </button>
                     `;
@@ -526,14 +526,49 @@
             });
         }
 
-        function downloadAsset(event, assetUrl) {
+        async function downloadAsset(event, assetUrl, fileName) {
             event.preventDefault();
             
-            // Simply open the GitHub API asset URL in a new tab with authentication
-            // The browser will follow redirects to the final Azure Blob Storage URL
-            // without CORS restrictions since it's direct navigation, not a fetch request
-            const urlWithAuth = `${assetUrl}?access_token=${decryptedToken}`;
-            window.open(urlWithAuth, '_blank');
+            try {
+                // First, get the asset metadata which includes the browser_download_url
+                const response = await fetch(assetUrl, {
+                    headers: {
+                        'Authorization': `token ${decryptedToken}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch download URL');
+                }
+
+                const assetData = await response.json();
+                
+                // Use the browser_download_url to download the file directly
+                // This URL is authenticated via the token and doesn't have CORS issues
+                const downloadResponse = await fetch(assetData.url, {
+                    headers: {
+                        'Authorization': `token ${decryptedToken}`,
+                        'Accept': 'application/octet-stream'
+                    }
+                });
+
+                if (!downloadResponse.ok) {
+                    throw new Error('Download failed');
+                }
+
+                const blob = await downloadResponse.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            } catch (err) {
+                showError(`Failed to download ${fileName}: ${err.message}`);
+            }
         }
 
         function formatBytes(bytes) {
@@ -554,4 +589,3 @@
     </script>
 </body>
 </html>
-
