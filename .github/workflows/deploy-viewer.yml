@@ -1,0 +1,124 @@
+name: Deploy Protected Release Viewer
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'release-viewer-protected.html'
+      - '.github/workflows/deploy-viewer.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Encrypt Token and Build Viewer
+        env:
+          GITHUB_TOKEN_VALUE: ${{ secrets.VIEWER_GITHUB_TOKEN }}
+          VIEWER_PASSWORD: ${{ secrets.VIEWER_PASSWORD }}
+          REPO_NAME: ${{ secrets.REPOSITORY }}
+        run: |
+          # Create encryption script
+          cat > encrypt.js << 'EOF'
+          const crypto = require('crypto');
+          const fs = require('fs');
+
+          // Get config from environment
+          const token = process.env.GITHUB_TOKEN_VALUE;
+          const password = process.env.VIEWER_PASSWORD;
+          const repo = process.env.REPO_NAME;
+
+          if (!token || !password) {
+            console.error('Error: VIEWER_GITHUB_TOKEN and VIEWER_PASSWORD secrets must be set');
+            process.exit(1);
+          }
+
+          console.log('Encrypting token with password-based encryption...');
+
+          // Generate salt and IV
+          const salt = crypto.randomBytes(16);
+          const iv = crypto.randomBytes(12);
+
+          // Derive key from password
+          const key = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+
+          // Encrypt token
+          const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+          const encrypted = Buffer.concat([
+            cipher.update(token, 'utf8'),
+            cipher.final()
+          ]);
+          const authTag = cipher.getAuthTag();
+
+          // Combine encrypted data with auth tag
+          const encryptedWithTag = Buffer.concat([encrypted, authTag]);
+
+          // Create config object
+          const config = {
+            repo: repo,
+            encryptedToken: `${salt.toString('hex')}.${iv.toString('hex')}.${encryptedWithTag.toString('hex')}`
+          };
+
+          console.log('Encryption complete!');
+          console.log('Repository:', repo);
+          console.log('Encrypted token length:', config.encryptedToken.length);
+
+          // Read HTML template
+          const html = fs.readFileSync('release-viewer-protected.html', 'utf8');
+
+          // Replace placeholder with encrypted config
+          const outputHtml = html.replace(
+            '"%%ENCRYPTED_CONFIG%%"',
+            JSON.stringify(config)
+          );
+
+          // Write to output
+          fs.mkdirSync('viewer-output', { recursive: true });
+          fs.writeFileSync('viewer-output/index.html', outputHtml);
+
+          console.log('Built viewer page: viewer-output/index.html');
+          EOF
+
+          # Run encryption
+          node encrypt.js
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './viewer-output'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Summary
+        run: |
+          echo "## 🎉 Deployment Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Your protected release viewer has been deployed!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Access URL:** https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Setup:**" >> $GITHUB_STEP_SUMMARY
+          echo "1. Open the URL on your phone" >> $GITHUB_STEP_SUMMARY
+          echo "2. Enter your password (set in VIEWER_PASSWORD secret)" >> $GITHUB_STEP_SUMMARY
+          echo "3. Bookmark it for easy access!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Security:**" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Token is encrypted with AES-256-GCM" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Password never stored in code or logs" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Session cleared when browser closes" >> $GITHUB_STEP_SUMMARY
