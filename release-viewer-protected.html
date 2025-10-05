@@ -328,11 +328,11 @@
             }
 
             try {
-                // Parse encrypted config
-                let config;
-                try {
-                    config = JSON.parse(ENCRYPTED_CONFIG);
-                } catch (e) {
+                // Get encrypted config (already an object, no need to parse)
+                const config = ENCRYPTED_CONFIG;
+                
+                // Validate config
+                if (!config || typeof config !== 'object' || !config.encryptedData) {
                     showError('Invalid configuration. Please rebuild the page.');
                     return;
                 }
